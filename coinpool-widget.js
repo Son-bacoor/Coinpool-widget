@@ -41,20 +41,9 @@ window.addEventListener('load', function() {
 
             var userLanguage = 'en';
             var isHumanActive = false;
-            var currentTicketId = null;
             var sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
-            var supportData = {};
-            var supportStep = null;
-            var rateLimitUntil = 0;
-            var msgTimestamps = [];
-            var RATE_LIMIT_MAX = 3;
-            var RATE_LIMIT_WINDOW = 10000;
-            var RATE_LIMIT_COOLDOWN = 30000;
-
             var NAOMI_AVATAR = "https://support.coinpool.app/wp-content/uploads/2026/04/Naomi-CoinPool-Support-Team.webp";
             var KEN_AVATAR = "https://support.coinpool.app/wp-content/uploads/2026/04/Ken-CoinPool-Support.webp";
-            var ROUTER_URL = "https://coinpool-support.bacoor.io";
-
             var CHAINS = [
                 {id:"eth",label:"Ethereum"},{id:"base",label:"Base"},{id:"arbitrum",label:"Arbitrum"},
                 {id:"optimism",label:"Optimism"},{id:"bsc",label:"BSC"},{id:"solana",label:"Solana"},{id:"unichain",label:"Unichain"}
@@ -91,7 +80,6 @@ window.addEventListener('load', function() {
                 .cp-time{font-size:10px;color:#9095a0;margin:4px 0 0 8px;display:block}
                 .cp-user-time{font-size:10px;color:#9095a0;margin-top:4px;text-align:right;display:block;width:100%}
                 .guest-container{flex-direction:column!important;align-items:flex-end!important}
-                .cp-rate-banner{background:#2a2d33;color:#ff6b6b;font-size:12px;text-align:center;padding:6px 12px;border-radius:6px;margin:4px 12px;animation:cp-fade 0.3s ease}
                 .cp-card{background:#1e2128;border-radius:12px;overflow:hidden;width:100%;max-width:320px;font-size:13px;animation:cp-fade 0.4s ease;border:1px solid #3a3d44}
                 .cp-card-header{padding:12px 14px 10px;background:#252830;display:flex;align-items:center;gap:10px}
                 .cp-coin-img{width:32px;height:32px;border-radius:50%}
@@ -142,6 +130,9 @@ window.addEventListener('load', function() {
                 .cp-chain-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
                 .cp-chain-btn{background:#3a3d44;border:1px solid #5f6166;color:#fff;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s ease}
                 .cp-chain-btn:hover,.cp-chain-btn.active{background:#00FFAD;color:#1B1E25;border-color:#00FFAD}
+                .cp-rate-banner{background:#2a2d33;color:#ff6b6b;font-size:12px;text-align:center;padding:6px 12px;border-radius:6px;margin:4px 12px}
+                .cp-new-chat-btn{width:100%;background:transparent;border:none;border-top:1px solid #3a3d44;color:#9095a0;font-size:11px;padding:6px;cursor:pointer}
+                .cp-new-chat-btn:hover{color:#00FFAD}
                 `;
                 host.shadowRoot.appendChild(s);
             }
@@ -151,117 +142,8 @@ window.addEventListener('load', function() {
                 setTimeout(function() { hideEmptyBubbles(host); }, 1500);
                 setInterval(function() { hideEmptyBubbles(host); addLabels(host); renderCards(host); }, 900);
                 setInterval(function() { detectLanguage(host); }, 1000);
-                setTimeout(function() { interceptInput(host); }, 2000);
                 setTimeout(function() { interceptResetButton(host); }, 2000);
                 setTimeout(function() { injectNewChatButton(host); }, 2500);
-            }
-
-            // ── Intercept the 🔄 reset button to do a full flow reset ──
-            function interceptResetButton(host) {
-                var sr = host.shadowRoot;
-                var resetBtn = sr.querySelector('button.chatbot-button.my-2.ml-2');
-                if (!resetBtn) return;
-                if (host._resetIntercepted) return;
-                host._resetIntercepted = true;
-                resetBtn.addEventListener('click', function() {
-                    setTimeout(function() { doFullReset(host); }, 300);
-                });
-            }
-
-            // ── Inject "Start New Chat" button at bottom ──
-            function injectNewChatButton(host) {
-                var sr = host.shadowRoot;
-                var inputArea = sr.querySelector('.chatbot-input')
-                                || sr.querySelector('.w-full.flex.items-end');
-                if (!inputArea || sr.querySelector('.cp-new-chat-btn')) return;
-                var btn = document.createElement('button');
-                btn.className = 'cp-new-chat-btn';
-                btn.textContent = userLanguage === 'ja' ? '🔄 新しいチャットを開始' : '🔄 Start New Chat';
-                btn.style.cssText = 'width:100%;background:transparent;border:none;border-top:1px solid #3a3d44;'+
-                    'color:#9095a0;font-size:11px;padding:6px;cursor:pointer;transition:color 0.2s;';
-                btn.onmouseover = function() { btn.style.color = '#00FFAD'; };
-                btn.onmouseout = function() { btn.style.color = '#9095a0'; };
-                btn.onclick = function() { doFullReset(host); };
-                inputArea.parentNode.insertBefore(btn, inputArea.nextSibling);
-            }
-
-            // ── Full reset — clears chat and goes back to language selector ──
-            function doFullReset(host) {
-                var sr = host.shadowRoot;
-                // Clear chat view
-                var chatView = sr.querySelector('.chatbot-chat-view') || sr.querySelector('.scrollable-container');
-                if (chatView) {
-                    // Remove all injected messages
-                    chatView.querySelectorAll('.cp-injected').forEach(function(el) { el.remove(); });
-                    // Hide all Flowise messages
-                    chatView.querySelectorAll('.host-container, .guest-container').forEach(function(el) {
-                        el.style.display = 'none';
-                    });
-                }
-                // Reset state
-                host._greetingShown = false;
-                host._inputIntercepted = false;
-                host._resetIntercepted = false;
-                supportStep = null;
-                supportData = {};
-                userLanguage = 'en';
-                isHumanActive = false;
-                currentTicketId = null;
-                sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
-                msgTimestamps = [];
-                rateLimitUntil = 0;
-
-                // Show starter prompts again
-                var starterContainer = sr.querySelector('.w-full.flex.flex-row.flex-wrap.px-5');
-                if (starterContainer) {
-                    starterContainer.style.display = '';
-                    starterContainer.querySelectorAll('.host-container').forEach(function(el) {
-                        el.style.display = '';
-                    });
-                }
-
-                // Re-intercept input and reset button
-                setTimeout(function() { interceptInput(host); }, 500);
-                setTimeout(function() { interceptResetButton(host); }, 500);
-
-                // Update new chat button language
-                var newChatBtn = sr.querySelector('.cp-new-chat-btn');
-                if (newChatBtn) newChatBtn.textContent = '🔄 Start New Chat';
-            }
-
-            // ── Intercept Flowise input — only for support flow ──
-            function interceptInput(host) {
-                var sr = host.shadowRoot;
-                var sendBtn = sr.querySelector('button.chatbot-button.m-0');
-                var inputEl = sr.querySelector('textarea, input[type="text"]');
-                if (!sendBtn || !inputEl) {
-                    setTimeout(function() { interceptInput(host); }, 1000);
-                    return;
-                }
-                if (host._inputIntercepted) return;
-                host._inputIntercepted = true;
-
-                function handleSend(e) {
-                    if (!host._greetingShown) return;
-                    if (!supportStep) return; // let Flowise handle everything else
-
-                    var text = inputEl.value.trim();
-                    if (!text) return;
-
-                    // Only intercept during support flow
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    inputEl.value = '';
-                    inputEl.dispatchEvent(new Event('input', {bubbles: true}));
-                    injectUserMessage(host, text);
-                    handleSupportStep(text, host);
-                }
-
-                sendBtn.addEventListener('click', handleSend, true);
-                inputEl.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter' && !e.shiftKey) handleSend(e);
-                }, true);
             }
 
             function hideEmptyBubbles(host) {
@@ -278,7 +160,6 @@ window.addEventListener('load', function() {
                     if (m.textContent.includes('日本語')) userLanguage = 'ja';
                     else if (m.textContent.includes('English')) userLanguage = 'en';
                 });
-                // Update new chat button text
                 var btn = host.shadowRoot.querySelector('.cp-new-chat-btn');
                 if (btn) btn.textContent = userLanguage === 'ja' ? '🔄 新しいチャットを開始' : '🔄 Start New Chat';
             }
@@ -415,46 +296,33 @@ window.addEventListener('load', function() {
                 });
                 return '<div class="cp-disamb">'+
                     '<div class="cp-disamb-title">Multiple results for "'+data.query+'" — pick one:</div>'+
-                    bH+
-                    '<div class="cp-disamb-note">Can\'t find yours? Give me more details below 👇</div></div>';
+                    bH+'<div class="cp-disamb-note">Can\'t find yours? Give me more details below 👇</div></div>';
             }
 
             function renderCards(host) {
                 var sr = host.shadowRoot;
                 var isJa = userLanguage === 'ja';
-
                 sr.querySelectorAll('.chatbot-host-bubble:not(.cp-rendered)').forEach(function(b) {
                     var text = b.textContent.replace(/\u00a0/g,'').trim();
-
-                    // Hide empty welcome bubble only
-                    if (!text) {
-                        b.classList.add('cp-rendered');
-                        var c = b.closest('.host-container');
-                        if (c) c.style.display = 'none';
-                        return;
-                    }
-                    // Hide internal control messages
+                    if (!text) return;
                     if (text === 'SILENT' || text === 'NO_REPLIES') {
                         b.classList.add('cp-rendered');
                         var c = b.closest('.host-container');
                         if (c) c.style.display = 'none';
                         return;
                     }
-                    // Rate limit
                     if (text === 'RATE_LIMITED') {
                         b.classList.add('cp-rendered');
                         var c = b.closest('.host-container');
                         if (c) c.style.display = 'none';
                         showRateLimitBanner(host); return;
                     }
-                    // Trending selector
                     if (text === 'SHOW_TRENDING_SELECTOR') {
                         b.classList.add('cp-rendered');
                         var c = b.closest('.host-container');
                         if (c) c.style.display = 'none';
                         showTrendingSelector(host); return;
                     }
-                    // Human reply
                     if (text.startsWith('HUMAN_REPLY:')) {
                         b.classList.add('cp-rendered');
                         var c = b.closest('.host-container');
@@ -469,32 +337,22 @@ window.addEventListener('load', function() {
                         } catch(e) {}
                         return;
                     }
-                    // Cards — replace content in-place (keeps Flowise bubble, correct order)
                     if (text.startsWith('CARD:')) {
                         b.classList.add('cp-rendered');
                         try {
                             var cd = JSON.parse(text.replace('CARD:',''));
-                            if (cd.type==='MARKET_CARD') {
-                                b.innerHTML = buildMarketCardHTML(cd);
-                                b.style.cssText = 'background:transparent!important;padding:0!important;max-width:320px;width:100%;';
-                            } else if (cd.type==='TRENDING_CARD') {
-                                b.innerHTML = buildTrendingCardHTML(cd);
-                                b.style.cssText = 'background:transparent!important;padding:0!important;max-width:320px;width:100%;';
-                            } else if (cd.type==='DISAMBIGUATION') {
-                                b.innerHTML = buildDisambiguationHTML(cd);
-                                b.style.cssText = 'background:transparent!important;padding:0!important;max-width:320px;width:100%;';
-                            }
+                            if (cd.type==='MARKET_CARD') { b.innerHTML = buildMarketCardHTML(cd); b.style.cssText = 'background:transparent!important;padding:0!important;max-width:320px;width:100%;'; }
+                            else if (cd.type==='TRENDING_CARD') { b.innerHTML = buildTrendingCardHTML(cd); b.style.cssText = 'background:transparent!important;padding:0!important;max-width:320px;width:100%;'; }
+                            else if (cd.type==='DISAMBIGUATION') { b.innerHTML = buildDisambiguationHTML(cd); b.style.cssText = 'background:transparent!important;padding:0!important;max-width:320px;width:100%;'; }
                         } catch(e) {}
                         return;
                     }
-                    // Escalation — add human button to existing bubble
                     if (text === 'NEEDS_ESCALATION') {
                         b.classList.add('cp-rendered');
                         var msg = isJa ? 'この件はサポートチームが直接対応いたします😊' : 'This one needs our support team\'s attention! 😊';
                         var btn = '<div class="cp-flow-btns" style="margin-top:10px;"><button class="cp-flow-btn" style="border-color:#ff9f43;color:#ff9f43;" onclick="cpFlow(\'human\')">👋 '+(isJa?'担当者に繋ぐ':'Talk to a Human')+'</button></div>';
                         b.innerHTML = msg+btn; return;
                     }
-                    // Human button hint
                     if (text.includes('||SHOW_HUMAN_BTN')) {
                         b.classList.add('cp-rendered');
                         var clean = text.replace('||SHOW_HUMAN_BTN','');
@@ -503,7 +361,6 @@ window.addEventListener('load', function() {
                     }
                 });
 
-                // One-time greeting after language selection
                 if (!host._greetingShown) {
                     var guestBubbles = sr.querySelectorAll('.chatbot-guest-bubble');
                     if (guestBubbles.length > 0) {
@@ -519,9 +376,7 @@ window.addEventListener('load', function() {
             }
 
             function showGreeting(host, isJa) {
-                var greet = isJa
-                    ? 'こんにちは！ナオミちゃんです😊 本日はどのようなご用件でしょうか？'
-                    : 'Hi there! I\'m Naomi-chan 😊 How can I help you today?';
+                var greet = isJa ? 'こんにちは！ナオミちゃんです😊 本日はどのようなご用件でしょうか？' : 'Hi there! I\'m Naomi-chan 😊 How can I help you today?';
                 var btns = '<div class="cp-flow-btns">'+
                     '<button class="cp-flow-btn" onclick="cpFlow(\'support\')">🛠️ '+(isJa?'テクニカルサポート':'Technical Support')+'</button>'+
                     '<button class="cp-flow-btn" onclick="cpFlow(\'market\')">📊 '+(isJa?'マーケットリサーチ':'Market Research')+'</button>'+
@@ -541,10 +396,7 @@ window.addEventListener('load', function() {
 
             function updateAvatarToKen(host) {
                 host.shadowRoot.querySelectorAll('img[src*="Naomi"]').forEach(function(i) { i.src = KEN_AVATAR; });
-                host.shadowRoot.querySelectorAll('.cp-name').forEach(function(n) {
-                    n.textContent = userLanguage==='ja' ? 'ケンくん' : 'Ken-kun';
-                    n.classList.add('human');
-                });
+                host.shadowRoot.querySelectorAll('.cp-name').forEach(function(n) { n.textContent = userLanguage==='ja'?'ケンくん':'Ken-kun'; n.classList.add('human'); });
             }
 
             function showRateLimitBanner(host) {
@@ -553,154 +405,59 @@ window.addEventListener('load', function() {
                 var banner = document.createElement('div');
                 banner.className = 'cp-rate-banner';
                 var secs = 30;
-                banner.textContent = (userLanguage==='ja' ? 'ちょっと待って！😅 ' : 'Slow down a little! 😅 ')+secs+'s...';
+                banner.textContent = (userLanguage==='ja'?'ちょっと待って！😅 ':'Slow down a little! 😅 ')+secs+'s...';
                 chatView.appendChild(banner);
-                chatView.scrollTop = chatView.scrollHeight;
-                var iv = setInterval(function() {
-                    secs--;
-                    if (secs <= 0) { clearInterval(iv); banner.remove(); }
-                    else banner.textContent = (userLanguage==='ja'?'ちょっと待って！😅 ':'Slow down a little! 😅 ')+secs+'s...';
-                }, 1000);
+                var iv = setInterval(function() { secs--; if (secs<=0){clearInterval(iv);banner.remove();}else banner.textContent=(userLanguage==='ja'?'ちょっと待って！😅 ':'Slow down a little! 😅 ')+secs+'s...'; }, 1000);
             }
 
-            function injectUserMessage(host, text) {
+            function interceptResetButton(host) {
+                var sr = host.shadowRoot;
+                var resetBtn = sr.querySelector('button.chatbot-button.my-2.ml-2');
+                if (!resetBtn || host._resetIntercepted) return;
+                host._resetIntercepted = true;
+                resetBtn.addEventListener('click', function() { setTimeout(function() { doFullReset(host); }, 300); });
+            }
+
+            function injectNewChatButton(host) {
+                var sr = host.shadowRoot;
+                var inputArea = sr.querySelector('.chatbot-input')||sr.querySelector('.w-full.flex.items-end');
+                if (!inputArea || sr.querySelector('.cp-new-chat-btn')) return;
+                var btn = document.createElement('button');
+                btn.className = 'cp-new-chat-btn';
+                btn.textContent = '🔄 Start New Chat';
+                btn.onclick = function() { doFullReset(host); };
+                inputArea.parentNode.insertBefore(btn, inputArea.nextSibling);
+            }
+
+            function doFullReset(host) {
                 var sr = host.shadowRoot;
                 var chatView = sr.querySelector('.chatbot-chat-view')||sr.querySelector('.scrollable-container');
-                if (!chatView) return;
-                var wrapper = document.createElement('div');
-                wrapper.className = 'flex flex-row justify-end mb-2 items-end guest-container cp-injected';
-                var bubble = document.createElement('div');
-                bubble.className = 'chatbot-guest-bubble cp-injected-user';
-                bubble.style.cssText = 'background:#76787c;color:#fff;border-radius:8px;padding:10px 14px;max-width:280px;word-break:break-word;line-height:1.5;';
-                bubble.textContent = text;
-                var ts = document.createElement('span');
-                ts.className = 'cp-user-time'; ts.textContent = getTime();
-                wrapper.appendChild(bubble);
-                wrapper.appendChild(ts);
-                chatView.appendChild(wrapper);
-                chatView.scrollTop = chatView.scrollHeight;
-            }
-
-            function handleSupportStep(text, host) {
-                if (!supportStep) return;
-                var isJa = userLanguage==='ja';
-                injectUserMessage(host, text);
-                if (supportStep==='issue_check') {
-                    supportData.issue = text;
-                    supportStep = null;
-                    sendToRouter('SUPPORT_FLOW_END', host);
-                    sendToRouterWithCallback('SUPPORT_ISSUE_CHECK:'+text, host, function(answer) {
-                        var isJa2 = userLanguage==='ja';
-                        if (answer === 'NEEDS_ESCALATION') {
-                            // Account-level problem — show escalation message + prominent human button
-                            var msg = isJa2
-                                ? 'この件はサポートチームが直接対応いたします😊'
-                                : 'This one needs our support team\'s attention! 😊';
-                            var btn = '<div class="cp-flow-btns" style="margin-top:10px;">'+
-                                '<button class="cp-flow-btn" style="border-color:#ff9f43;color:#ff9f43;" onclick="cpFlow(\'human\')">👋 '+(isJa2?'担当者に繋ぐ':'Talk to a Human')+'</button>'+
-                                '</div>';
-                            injectBotMessage(host, msg+btn, false);
-                        } else if (answer.includes('||SHOW_HUMAN_BTN')) {
-                            // Naomi answered but offer subtle escape hatch
-                            var cleanAnswer = answer.replace('||SHOW_HUMAN_BTN', '');
-                            var hint = '<div style="margin-top:10px;font-size:11px;color:#9095a0;">'+
-                                (isJa2 ? '解決しましたか？解決しない場合は ' : 'Still need help? ')+
-                                '<span style="color:#ff9f43;cursor:pointer;" onclick="cpFlow(\'human\')">'+
-                                (isJa2 ? '担当者に繋ぐ👋' : 'Talk to a Human 👋')+
-                                '</span></div>';
-                            injectBotMessage(host, cleanAnswer+hint, false);
-                        } else {
-                            injectBotMessage(host, answer, false);
-                        }
-                    });
-                } else if (supportStep==='name') {
-                    supportData.name = text; supportStep = 'email';
-                    injectBotMessage(host, isJa?'ありがとうございます！メールアドレスを教えてください📧':'Thanks! What\'s your email address? 📧', false);
-                } else if (supportStep==='email') {
-                    supportData.email = text; supportStep = 'wallet';
-                    injectBotMessage(host, isJa?'ウォレットアドレスを教えてください🔑':'What\'s your wallet address? 🔑', false);
-                } else if (supportStep==='wallet') {
-                    supportData.wallet = text; supportStep = 'subaccount';
-                    injectBotMessage(host, isJa?'サブアカウントアドレスはありますか？（なければ「なし」）':'Sub-account address? (Type "none" if not applicable)', false);
-                } else if (supportStep==='subaccount') {
-                    supportData.subaccount = text; supportStep = null;
-                    sendToRouter('SUPPORT_FLOW_END', host);
-                    sendToRouter('SUPPORT_TICKET:'+JSON.stringify(supportData), host);
+                if (chatView) {
+                    chatView.querySelectorAll('.cp-injected').forEach(function(el) { el.remove(); });
+                    chatView.querySelectorAll('.host-container, .guest-container').forEach(function(el) { el.style.display = 'none'; });
                 }
+                host._greetingShown = false;
+                host._resetIntercepted = false;
+                userLanguage = 'en';
+                isHumanActive = false;
+                sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
+                var starterContainer = sr.querySelector('.w-full.flex.flex-row.flex-wrap.px-5');
+                if (starterContainer) { starterContainer.style.display = ''; starterContainer.querySelectorAll('.host-container').forEach(function(el){el.style.display='';}); }
+                setTimeout(function() { interceptResetButton(host); }, 500);
+                var newChatBtn = sr.querySelector('.cp-new-chat-btn');
+                if (newChatBtn) newChatBtn.textContent = '🔄 Start New Chat';
             }
 
-            function pollReplies(host) {
-                if (!currentTicketId || !host) return;
-                fetch(ROUTER_URL+'/replies/'+sessionId)
-                    .then(function(r){return r.json();})
-                    .then(function(data) {
-                        if (data.replies && data.replies.length) {
-                            isHumanActive = true;
-                            data.replies.forEach(function(r) {
-                                injectBotMessage(host, r.text, false);
-                                updateAvatarToKen(host);
-                            });
-                        }
-                    }).catch(function(){});
-            }
-
-            function sendToRouterWithCallback(content, host, callback) {
-                fetch(ROUTER_URL+'/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({session_id: sessionId, messages:[{role:'user',content:content}]})
-                })
-                .then(function(r){return r.json();})
-                .then(function(data) {
-                    var answer = data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
-                    if (answer && callback) callback(answer);
-                })
-                .catch(function(e){console.error('[Widget] Router error',e);});
-            }
-
-            function sendToRouter(content, host) {
-                fetch(ROUTER_URL+'/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({session_id: sessionId, messages:[{role:'user',content:content}]})
-                })
-                .then(function(r){return r.json();})
-                .then(function(data) {
-                    var answer = data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
-                    if (!answer) return;
-                    if (answer.startsWith('CARD:')) {
-                        try {
-                            var cd = JSON.parse(answer.replace('CARD:',''));
-                            if (cd.type==='MARKET_CARD') injectBotMessage(host, buildMarketCardHTML(cd), true);
-                            else if (cd.type==='TRENDING_CARD') injectBotMessage(host, buildTrendingCardHTML(cd), true);
-                            else if (cd.type==='DISAMBIGUATION') injectBotMessage(host, buildDisambiguationHTML(cd), true);
-                        } catch(e){}
-                    } else if (answer==='SHOW_TRENDING_SELECTOR') {
-                        showTrendingSelector(host);
-                    } else if (answer!=='NO_REPLIES') {
-                        injectBotMessage(host, answer, false);
-                    }
-                    if (content.startsWith('SUPPORT_TICKET:')) {
-                        var m = answer.match(/#(\d+)/);
-                        if (m) {
-                            currentTicketId = m[1];
-                            setInterval(function() { pollReplies(host); }, 5000);
-                        }
-                    }
-                })
-                .catch(function(e){console.error('[Widget] Router error',e);});
-            }
-
-            // ── Global handlers ──
             window.cpCopy = function(text, btn) {
-                navigator.clipboard.writeText(text).then(function() {
-                    var o = btn.textContent; btn.textContent = '✅';
-                    setTimeout(function(){btn.textContent=o;}, 1500);
-                });
+                navigator.clipboard.writeText(text).then(function() { var o=btn.textContent; btn.textContent='✅'; setTimeout(function(){btn.textContent=o;},1500); });
             };
             window.cpSelectCoin = function(coinId) {
                 var host = document.querySelector('flowise-chatbot');
-                if (host) sendToRouter('MARKET_REQUEST:'+coinId, host);
+                if (!host) return;
+                var sr = host.shadowRoot;
+                var input = sr.querySelector('textarea, input[type="text"]');
+                var sendBtn = sr.querySelector('button.chatbot-button.m-0');
+                if (input && sendBtn) { input.value='MARKET_REQUEST:'+coinId; input.dispatchEvent(new Event('input',{bubbles:true})); sendBtn.click(); }
             };
             window.cpTrending = function(network, btn) {
                 var host = document.querySelector('flowise-chatbot');
@@ -708,24 +465,27 @@ window.addEventListener('load', function() {
                 var grid = host.shadowRoot.querySelector('#cp-chain-grid');
                 if (grid) grid.querySelectorAll('.cp-chain-btn').forEach(function(b){b.classList.remove('active');});
                 if (btn) btn.classList.add('active');
-                sendToRouter('TRENDING_REQUEST:'+network, host);
+                var sr = host.shadowRoot;
+                var input = sr.querySelector('textarea, input[type="text"]');
+                var sendBtn = sr.querySelector('button.chatbot-button.m-0');
+                if (input && sendBtn) { input.value='TRENDING_REQUEST:'+network; input.dispatchEvent(new Event('input',{bubbles:true})); sendBtn.click(); }
             };
             window.cpFlow = function(flow) {
                 var host = document.querySelector('flowise-chatbot');
                 if (!host) return;
                 var isJa = userLanguage==='ja';
+                var sr = host.shadowRoot;
+                var input = sr.querySelector('textarea, input[type="text"]');
+                var sendBtn = sr.querySelector('button.chatbot-button.m-0');
                 if (flow==='support') {
-                    supportStep = 'issue_check'; supportData = {};
-                    sendToRouter('SUPPORT_FLOW_START', host);
                     injectBotMessage(host, isJa?'どのような問題が発生していますか？詳しく教えてください💬':'What issue are you facing? Please describe it and I\'ll try to help! 💬', false);
-                } else if (flow==='human') {
-                    supportStep = 'name'; supportData = supportData || {};
-                    sendToRouter('SUPPORT_FLOW_START', host);
-                    injectBotMessage(host, isJa?'担当者に繋ぎます！まずお名前を教えてください😊':'Connecting you with our team! First, what\'s your name? 😊', false);
                 } else if (flow==='market') {
                     injectBotMessage(host, isJa?'プロジェクト名、チェーン、またはコントラクトアドレスを教えてください🔍':'Tell me a project name, chain, or contract address! 🔍', false);
                 } else if (flow==='trending') {
                     showTrendingSelector(host);
+                } else if (flow==='human') {
+                    if (input && sendBtn) { input.value='SUPPORT_FLOW_START'; input.dispatchEvent(new Event('input',{bubbles:true})); sendBtn.click(); }
+                    injectBotMessage(host, isJa?'担当者に繋ぎます！まずお名前を教えてください😊':'Connecting you with our team! First, what\'s your name? 😊', false);
                 }
             };
 
