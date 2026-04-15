@@ -440,10 +440,15 @@ window.addEventListener('load', function() {
                 var sr = host.shadowRoot;
                 var isJa = userLanguage === 'ja';
 
-                // After greeting shown, hide Flowise's own user bubbles (we inject our own)
+                // Hide only Flowise user bubbles visually (not remove from DOM)
+                // We inject our own styled ones, but keep Flowise's for message sending
                 if (host._greetingShown) {
                     sr.querySelectorAll('.guest-container:not(.cp-injected)').forEach(function(c) {
-                        c.style.display = 'none';
+                        c.style.visibility = 'hidden';
+                        c.style.height = '0';
+                        c.style.margin = '0';
+                        c.style.padding = '0';
+                        c.style.overflow = 'hidden';
                     });
                 }
 
