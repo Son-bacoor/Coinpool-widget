@@ -229,7 +229,7 @@ window.addEventListener('load', function() {
                 if (newChatBtn) newChatBtn.textContent = '🔄 Start New Chat';
             }
 
-            // ── Intercept Flowise input after language selected ──
+            // ── Intercept Flowise input — only for support flow ──
             function interceptInput(host) {
                 var sr = host.shadowRoot;
                 var sendBtn = sr.querySelector('button.chatbot-button.m-0');
@@ -243,36 +243,19 @@ window.addEventListener('load', function() {
 
                 function handleSend(e) {
                     if (!host._greetingShown) return;
+                    if (!supportStep) return; // let Flowise handle everything else
+
                     var text = inputEl.value.trim();
                     if (!text) return;
 
-                    // Rate limit check
-                    var now = Date.now();
-                    if (now < rateLimitUntil) {
-                        e.preventDefault(); e.stopPropagation();
-                        showRateLimitBanner(host); return;
-                    }
-                    msgTimestamps = msgTimestamps.filter(function(t) { return now - t < RATE_LIMIT_WINDOW; });
-                    if (msgTimestamps.length >= RATE_LIMIT_MAX) {
-                        rateLimitUntil = now + RATE_LIMIT_COOLDOWN;
-                        e.preventDefault(); e.stopPropagation();
-                        showRateLimitBanner(host); return;
-                    }
-                    msgTimestamps.push(now);
-
-                    // Support flow — handle entirely ourselves, block Flowise
-                    if (supportStep) {
-                        e.preventDefault(); e.stopPropagation();
-                        e.stopImmediatePropagation();
-                        inputEl.value = '';
-                        inputEl.dispatchEvent(new Event('input', {bubbles: true}));
-                        injectUserMessage(host, text);
-                        handleSupportStep(text, host);
-                        return;
-                    }
-
-                    // Regular message — let Flowise handle it normally
-                    // renderCards() will process the response
+                    // Only intercept during support flow
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    inputEl.value = '';
+                    inputEl.dispatchEvent(new Event('input', {bubbles: true}));
+                    injectUserMessage(host, text);
+                    handleSupportStep(text, host);
                 }
 
                 sendBtn.addEventListener('click', handleSend, true);
@@ -439,18 +422,6 @@ window.addEventListener('load', function() {
             function renderCards(host) {
                 var sr = host.shadowRoot;
                 var isJa = userLanguage === 'ja';
-
-                // Hide only Flowise user bubbles visually (not remove from DOM)
-                // We inject our own styled ones, but keep Flowise's for message sending
-                if (host._greetingShown) {
-                    sr.querySelectorAll('.guest-container:not(.cp-injected)').forEach(function(c) {
-                        c.style.visibility = 'hidden';
-                        c.style.height = '0';
-                        c.style.margin = '0';
-                        c.style.padding = '0';
-                        c.style.overflow = 'hidden';
-                    });
-                }
 
                 sr.querySelectorAll('.chatbot-host-bubble:not(.cp-rendered)').forEach(function(b) {
                     var text = b.textContent.replace(/\u00a0/g,'').trim();
