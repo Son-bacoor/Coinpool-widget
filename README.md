@@ -1,0 +1,2 @@
+# Coinpool-widget
+AI Chat
