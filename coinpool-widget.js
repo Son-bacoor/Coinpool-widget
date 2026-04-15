@@ -246,61 +246,33 @@ window.addEventListener('load', function() {
                     var text = inputEl.value.trim();
                     if (!text) return;
 
-                    // Always block Flowise from handling the message
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-
-                    // Clear input
-                    inputEl.value = '';
-                    inputEl.dispatchEvent(new Event('input', {bubbles: true}));
-
                     // Rate limit check
                     var now = Date.now();
-                    if (now < rateLimitUntil) { showRateLimitBanner(host); return; }
+                    if (now < rateLimitUntil) {
+                        e.preventDefault(); e.stopPropagation();
+                        showRateLimitBanner(host); return;
+                    }
                     msgTimestamps = msgTimestamps.filter(function(t) { return now - t < RATE_LIMIT_WINDOW; });
                     if (msgTimestamps.length >= RATE_LIMIT_MAX) {
                         rateLimitUntil = now + RATE_LIMIT_COOLDOWN;
+                        e.preventDefault(); e.stopPropagation();
                         showRateLimitBanner(host); return;
                     }
                     msgTimestamps.push(now);
 
-                    // Show user bubble
-                    injectUserMessage(host, text);
-
-                    // Support flow step
+                    // Support flow — handle entirely ourselves, block Flowise
                     if (supportStep) {
+                        e.preventDefault(); e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        inputEl.value = '';
+                        inputEl.dispatchEvent(new Event('input', {bubbles: true}));
+                        injectUserMessage(host, text);
                         handleSupportStep(text, host);
                         return;
                     }
 
-                    // Send directly to router ourselves
-                    sendToRouterWithCallback(text, host, function(answer) {
-                        if (!answer || answer === 'SILENT' || answer === 'NO_REPLIES') return;
-                        if (answer === 'SHOW_TRENDING_SELECTOR') { showTrendingSelector(host); return; }
-                        if (answer === 'NEEDS_ESCALATION') {
-                            var isJa = userLanguage === 'ja';
-                            var msg = isJa ? 'この件はサポートチームが直接対応いたします😊' : 'This one needs our support team\'s attention! 😊';
-                            var btn = '<div class="cp-flow-btns" style="margin-top:10px;"><button class="cp-flow-btn" style="border-color:#ff9f43;color:#ff9f43;" onclick="cpFlow(\'human\')">👋 '+(isJa?'担当者に繋ぐ':'Talk to a Human')+'</button></div>';
-                            injectBotMessage(host, msg+btn, false); return;
-                        }
-                        if (answer.startsWith('CARD:')) {
-                            try {
-                                var cd = JSON.parse(answer.replace('CARD:',''));
-                                if (cd.type==='MARKET_CARD') injectBotMessage(host, buildMarketCardHTML(cd), true);
-                                else if (cd.type==='TRENDING_CARD') injectBotMessage(host, buildTrendingCardHTML(cd), true);
-                                else if (cd.type==='DISAMBIGUATION') injectBotMessage(host, buildDisambiguationHTML(cd), true);
-                            } catch(e) {}
-                            return;
-                        }
-                        if (answer.includes('||SHOW_HUMAN_BTN')) {
-                            var isJa = userLanguage === 'ja';
-                            var clean = answer.replace('||SHOW_HUMAN_BTN','');
-                            var hint = '<div style="margin-top:10px;font-size:11px;color:#9095a0;">'+(isJa?'解決しましたか？解決しない場合は ':'Still need help? ')+'<span style="color:#ff9f43;cursor:pointer;" onclick="cpFlow(\'human\')">'+(isJa?'担当者に繋ぐ👋':'Talk to a Human 👋')+'</span></div>';
-                            injectBotMessage(host, clean+hint, false); return;
-                        }
-                        injectBotMessage(host, answer, false);
-                    });
+                    // Regular message — let Flowise handle it normally
+                    // renderCards() will process the response
                 }
 
                 sendBtn.addEventListener('click', handleSend, true);
